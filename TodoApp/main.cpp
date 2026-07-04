@@ -1,0 +1,271 @@
+#define _WIN32_WINNT 0x0A00
+#include "httplib.h"
+#include "json.hpp"
+#include <mysql.h>
+#include <windows.h>
+#include <string>
+#include <iostream>
+
+using json = nlohmann::json;
+
+// ================== CẤU HÌNH KẾT NỐI DATABASE ==================
+static const char *DB_HOST = "127.0.0.1";
+static const char *DB_USER = "root";
+static const char *DB_PASS = "datdjay123";
+static const char *DB_NAME = "todo_db";
+static const unsigned int DB_PORT = 3306;
+// =================================================================
+
+// ---------- Định nghĩa con trỏ hàm MySQL (nạp động từ libmysql.dll) ----------
+typedef MYSQL *(__stdcall *mysql_init_t)(MYSQL *);
+typedef MYSQL *(__stdcall *mysql_real_connect_t)(MYSQL *, const char *, const char *, const char *, const char *, unsigned int, const char *, unsigned long);
+typedef void(__stdcall *mysql_close_t)(MYSQL *);
+typedef const char *(__stdcall *mysql_error_t)(MYSQL *);
+typedef int(__stdcall *mysql_query_t)(MYSQL *, const char *);
+typedef MYSQL_RES *(__stdcall *mysql_store_result_t)(MYSQL *);
+typedef MYSQL_ROW(__stdcall *mysql_fetch_row_t)(MYSQL_RES *);
+typedef void(__stdcall *mysql_free_result_t)(MYSQL_RES *);
+typedef int(__stdcall *mysql_options_t)(MYSQL *, enum mysql_option, const void *);
+typedef int(__stdcall *mysql_ssl_set_t)(MYSQL *, const char *, const char *, const char *, const char *, const char *);
+typedef unsigned long(__stdcall *mysql_real_escape_string_t)(MYSQL *, char *, const char *, unsigned long);
+
+mysql_init_t p_mysql_init = nullptr;
+mysql_real_connect_t p_mysql_real_connect = nullptr;
+mysql_close_t p_mysql_close = nullptr;
+mysql_error_t p_mysql_error = nullptr;
+mysql_query_t p_mysql_query = nullptr;
+mysql_store_result_t p_mysql_store_result = nullptr;
+mysql_fetch_row_t p_mysql_fetch_row = nullptr;
+mysql_free_result_t p_mysql_free_result = nullptr;
+mysql_options_t p_mysql_options = nullptr;
+mysql_ssl_set_t p_mysql_ssl_set = nullptr;
+mysql_real_escape_string_t p_mysql_real_escape_string = nullptr;
+
+bool LoadMySQL()
+{
+    static bool loaded = false;
+    if (loaded)
+        return true;
+
+    HMODULE h = LoadLibraryA("libmysql.dll");
+    if (!h)
+    {
+        std::cerr << "[LoadMySQL] Khong tim thay libmysql.dll (phai dat cung thu muc voi file .exe)" << std::endl;
+        return false;
+    }
+    p_mysql_init = (mysql_init_t)GetProcAddress(h, "mysql_init");
+    p_mysql_real_connect = (mysql_real_connect_t)GetProcAddress(h, "mysql_real_connect");
+    p_mysql_close = (mysql_close_t)GetProcAddress(h, "mysql_close");
+    p_mysql_error = (mysql_error_t)GetProcAddress(h, "mysql_error");
+    p_mysql_query = (mysql_query_t)GetProcAddress(h, "mysql_query");
+    p_mysql_store_result = (mysql_store_result_t)GetProcAddress(h, "mysql_store_result");
+    p_mysql_fetch_row = (mysql_fetch_row_t)GetProcAddress(h, "mysql_fetch_row");
+    p_mysql_free_result = (mysql_free_result_t)GetProcAddress(h, "mysql_free_result");
+    p_mysql_options = (mysql_options_t)GetProcAddress(h, "mysql_options");
+    p_mysql_ssl_set = (mysql_ssl_set_t)GetProcAddress(h, "mysql_ssl_set");
+    p_mysql_real_escape_string = (mysql_real_escape_string_t)GetProcAddress(h, "mysql_real_escape_string");
+
+    if (!p_mysql_init || !p_mysql_real_connect || !p_mysql_close || !p_mysql_error ||
+        !p_mysql_query || !p_mysql_store_result || !p_mysql_fetch_row || !p_mysql_free_result ||
+        !p_mysql_real_escape_string)
+    {
+        std::cerr << "[LoadMySQL] GetProcAddress that bai cho mot so ham can thiet" << std::endl;
+        return false;
+    }
+    loaded = true;
+    return true;
+}
+
+MYSQL *ConnectDB()
+{
+    if (!LoadMySQL())
+        return nullptr;
+
+    MYSQL *conn = p_mysql_init(nullptr);
+    if (!conn)
+    {
+        std::cerr << "[ConnectDB] mysql_init that bai" << std::endl;
+        return nullptr;
+    }
+
+    if (p_mysql_options)
+    {
+        int mode = SSL_MODE_DISABLED;
+        p_mysql_options(conn, MYSQL_OPT_SSL_MODE, (const char *)&mode);
+    }
+    else if (p_mysql_ssl_set)
+    {
+        p_mysql_ssl_set(conn, nullptr, nullptr, nullptr, nullptr, nullptr);
+    }
+
+    if (!p_mysql_real_connect(conn, DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT, nullptr, 0))
+    {
+        std::cerr << "[ConnectDB] Loi ket noi MySQL: " << p_mysql_error(conn) << std::endl;
+        p_mysql_close(conn);
+        return nullptr;
+    }
+    return conn;
+}
+
+std::string Escape(MYSQL *conn, const std::string &input)
+{
+    std::string out(input.size() * 2 + 1, '\0');
+    unsigned long len = p_mysql_real_escape_string(conn, &out[0], input.c_str(), (unsigned long)input.size());
+    out.resize(len);
+    return out;
+}
+
+json GetTasks()
+{
+    json arr = json::array();
+    MYSQL *conn = ConnectDB();
+    if (!conn)
+        return arr;
+
+    if (p_mysql_query(conn, "SELECT id, name, category, priority, completed FROM tasks ORDER BY id"))
+    {
+        std::cerr << "[GetTasks] Query loi: " << p_mysql_error(conn) << std::endl;
+        p_mysql_close(conn);
+        return arr;
+    }
+    MYSQL_RES *res = p_mysql_store_result(conn);
+    if (res)
+    {
+        MYSQL_ROW row;
+        while ((row = p_mysql_fetch_row(res)))
+        {
+            json obj;
+            obj["id"] = std::stoi(row[0]);
+            obj["name"] = row[1] ? row[1] : "";
+            obj["category"] = row[2] ? row[2] : "";
+            obj["priority"] = row[3] ? row[3] : "";
+            obj["completed"] = row[4] && std::string(row[4]) == "1";
+            arr.push_back(obj);
+        }
+        p_mysql_free_result(res);
+    }
+    p_mysql_close(conn);
+    return arr;
+}
+
+bool AddTask(const std::string &name, const std::string &category, const std::string &priority)
+{
+    MYSQL *conn = ConnectDB();
+    if (!conn)
+        return false;
+
+    std::string q = "INSERT INTO tasks (name, category, priority, completed) VALUES ('" +
+                    Escape(conn, name) + "','" + Escape(conn, category) + "','" +
+                    Escape(conn, priority) + "', 0)";
+    int ret = p_mysql_query(conn, q.c_str());
+    if (ret)
+        std::cerr << "[AddTask] Loi: " << p_mysql_error(conn) << std::endl;
+    p_mysql_close(conn);
+    return ret == 0;
+}
+
+bool ToggleTask(int id)
+{
+    MYSQL *conn = ConnectDB();
+    if (!conn)
+        return false;
+    std::string q = "UPDATE tasks SET completed = 1 - completed WHERE id = " + std::to_string(id);
+    int ret = p_mysql_query(conn, q.c_str());
+    if (ret)
+        std::cerr << "[ToggleTask] Loi: " << p_mysql_error(conn) << std::endl;
+    p_mysql_close(conn);
+    return ret == 0;
+}
+
+bool DeleteTask(int id)
+{
+    MYSQL *conn = ConnectDB();
+    if (!conn)
+        return false;
+    std::string q = "DELETE FROM tasks WHERE id = " + std::to_string(id);
+    int ret = p_mysql_query(conn, q.c_str());
+    if (ret)
+        std::cerr << "[DeleteTask] Loi: " << p_mysql_error(conn) << std::endl;
+    p_mysql_close(conn);
+    return ret == 0;
+}
+
+int main()
+{
+    MYSQL *test = ConnectDB();
+    if (test)
+    {
+        std::cout << "Ket noi MySQL thanh cong! (" << DB_HOST << ":" << DB_PORT << "/" << DB_NAME << ")" << std::endl;
+        p_mysql_close(test);
+    }
+    else
+    {
+        std::cerr << "!!! KHONG ket noi duoc MySQL. Server van chay nhung cac API se loi.\n"
+                     "    Kiem tra lai:\n"
+                     "    1) MySQL server (XAMPP/Service) da BAT chua?\n"
+                     "    2) User 'root' / pass 'datdjay123' co dung voi MySQL tren may nay khong?\n"
+                     "    3) Database 'todo_db' va bang 'tasks' da duoc tao chua? (xem file schema.sql)\n";
+    }
+
+    httplib::Server svr;
+
+    // Phục vụ file tĩnh (index.html, css, js...) nằm cùng thư mục với main.cpp / file .exe
+    svr.set_mount_point("/", "./");
+
+    svr.Get("/tasks", [](const httplib::Request &, httplib::Response &res)
+            {
+        json tasks = GetTasks();
+        res.set_content(tasks.dump(), "application/json"); });
+
+    svr.Post("/tasks", [](const httplib::Request &req, httplib::Response &res)
+             {
+        try {
+            auto data = json::parse(req.body);
+            std::string name = data.value("name", "");
+            std::string category = data.value("category", "");
+            std::string priority = data.value("priority", "");
+            if (name.empty()) {
+                res.status = 400;
+                res.set_content("{\"error\":\"name khong duoc rong\"}", "application/json");
+                return;
+            }
+            bool ok = AddTask(name, category, priority);
+            res.status = ok ? 201 : 500;
+            res.set_content(ok ? "{\"status\":\"ok\"}" : "{\"error\":\"insert that bai\"}", "application/json");
+        } catch (const std::exception &e) {
+            res.status = 400;
+            res.set_content(std::string("{\"error\":\"") + e.what() + "\"}", "application/json");
+        } });
+
+    // Luu y: httplib 0.12.3 khong ho tro cu phap ":id" + path_params (chi co o ban moi hon).
+    // Ban nay dung regex thuan cho route, nen phai bat id bang capture group (\d+) va lay qua req.matches[1].
+    svr.Put(R"(/tasks/(\d+))", [](const httplib::Request &req, httplib::Response &res)
+            {
+        try {
+            int id = std::stoi(req.matches[1].str());
+            bool ok = ToggleTask(id);
+            res.status = ok ? 200 : 500;
+            res.set_content(ok ? "{\"status\":\"ok\"}" : "{\"error\":\"update that bai\"}", "application/json");
+        } catch (...) {
+            res.status = 400;
+            res.set_content("{\"error\":\"id khong hop le\"}", "application/json");
+        } });
+
+    svr.Delete(R"(/tasks/(\d+))", [](const httplib::Request &req, httplib::Response &res)
+               {
+        try {
+            int id = std::stoi(req.matches[1].str());
+            bool ok = DeleteTask(id);
+            res.status = ok ? 200 : 500;
+            res.set_content(ok ? "{\"status\":\"ok\"}" : "{\"error\":\"delete that bai\"}", "application/json");
+        } catch (...) {
+            res.status = 400;
+            res.set_content("{\"error\":\"id khong hop le\"}", "application/json");
+        } });
+
+    std::cout << "Server dang chay tai http://localhost:8080 (va http://127.0.0.1:8080)\n";
+    // Dung "0.0.0.0" thay vi "localhost" de ep bind IPv4 ro rang,
+    // tranh truong hop he thong resolve "localhost" thanh IPv6 (::1) khien 127.0.0.1 khong ket noi duoc.
+    svr.listen("0.0.0.0", 8080);
+    return 0;
+}

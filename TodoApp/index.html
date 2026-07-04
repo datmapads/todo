@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Enterprise Todo Dashboard Pro</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: #f4f6fa; color: #1c1c1e; display: flex; height: 100vh; overflow: hidden; }
+        /* SIDEBAR */
+        .sidebar { width: 260px; background: #ffffff; border-right: 1px solid #e5e5ea; display: flex; flex-direction: column; padding: 24px; justify-content: space-between; }
+        .logo { font-size: 22px; font-weight: 800; color: #5856d6; margin-bottom: 32px; display: flex; align-items: center; gap: 8px; }
+        .menu-links { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+        .menu-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; color: #8e8e93; font-weight: 600; text-decoration: none; cursor: pointer; transition: all 0.2s; }
+        .menu-item:hover, .menu-item.active { background: #f2f2f7; color: #5856d6; }
+        .menu-item svg { width: 20px; height: 20px; fill: currentColor; }
+        /* CONTENT PANELS */
+        .main-content { flex: 1; padding: 40px; overflow-y: auto; display: flex; flex-direction: column; gap: 32px; }
+        .tab-panel { display: none; flex-direction: column; gap: 32px; }
+        .tab-panel.active { display: flex; }
+        .header-panel { display: flex; justify-content: space-between; align-items: center; }
+        .header-title h1 { font-size: 32px; font-weight: 700; }
+        .header-title p { color: #8e8e93; margin-top: 4px; font-size: 14px; }
+        /* LAYOUT GRID */
+        .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
+        .left-column, .right-column { display: flex; flex-direction: column; gap: 30px; }
+        .card { background: #ffffff; border-radius: 20px; padding: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.02); border: 1px solid #e5e5ea; }
+        .card-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        /* THỐNG KÊ KHỐI MÀU */
+        .categories-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+        .cat-card { padding: 20px; border-radius: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 120px; }
+        .cat-card .num { font-size: 28px; font-weight: 700; }
+        .cat-card .label { font-size: 14px; font-weight: 600; color: #666; }
+        .bg-health { background: #eef1fe; color: #4461ff; }
+        .bg-work { background: #e3f7ee; color: #10b981; }
+        .bg-mental { background: #fceef3; color: #ec4899; }
+        .bg-others { background: #f2f2f4; color: #636366; }
+        /* DANH SÁCH TASKS */
+        .task-list { display: flex; flex-direction: column; gap: 12px; }
+        .task-item { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-radius: 12px; background: #fafafa; border: 1px solid #f2f2f7; transition: background 0.2s; }
+        .task-item:hover { background: #f2f2f7; }
+        .task-left { display: flex; align-items: center; gap: 14px; flex: 1; cursor: pointer; }
+        .checkbox { width: 20px; height: 20px; border: 2px solid #dcdcdc; border-radius: 6px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .task-item.checked .checkbox { background: #5856d6; border-color: #5856d6; }
+        .task-item.checked .checkbox::after { content: "\2713"; color: #fff; font-size: 12px; font-weight: bold; }
+        .task-text { font-weight: 500; transition: color 0.2s; }
+        .task-item.checked .task-text { text-decoration: line-through; color: #aeaeaf; }
+        .task-right { display: flex; align-items: center; gap: 12px; }
+        .priority-badge { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; }
+        .p-high { background: #ffebeb; color: #ff3b30; }
+        .p-medium { background: #fff4e5; color: #ff9500; }
+        .p-low { background: #e3f7ee; color: #10b981; }
+        .btn-delete { background: none; border: none; color: #ff3b30; cursor: pointer; padding: 4px; border-radius: 6px; display: flex; align-items: center; justify-content: center; opacity: 0.5; transition: opacity 0.2s; }
+        .task-item:hover .btn-delete { opacity: 1; }
+        .btn-delete:hover { background: #ffebeb; }
+        .btn-delete svg { width: 16px; height: 16px; fill: currentColor; }
+        /* FORM INPUT */
+        .form-group { margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-size: 13px; font-weight: 600; color: #636366; }
+        .form-control { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #e5e5ea; background: #fafafa; font-size: 14px; outline: none; }
+        .form-control:focus { border-color: #5856d6; background: #fff; }
+        .btn-submit { width: 100%; background: #5856d6; color: #fff; border: none; padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 10px; }
+        .btn-submit:hover { background: #413fba; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="menu-top">
+            <div class="logo">📊 TodoCorp Pro</div>
+            <div class="menu-links">
+                <div class="menu-item active" id="menu-dashboard" onclick="switchTab('dashboard')"><svg viewBox="0 0 24 24"><path d="M10 20H5v-7H2l10-9 10 9h-3v7h-5v-6h-2v6z"/></svg>Dashboard</div>
+                <div class="menu-item" id="menu-tasks" onclick="switchTab('tasks')"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>Tasks</div>
+            </div>
+        </div>
+        <div class="menu-item"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>Settings</div>
+    </div>
+
+    <div class="main-content">
+
+        <div id="panel-dashboard" class="tab-panel active">
+            <div class="header-panel">
+                <div class="header-title">
+                    <h1>Project Dashboard</h1>
+                    <p>Chào mừng quay trở lại! Dưới đây là phân tích dữ liệu hôm nay.</p>
+                </div>
+            </div>
+            <div class="dashboard-grid">
+                <div class="left-column">
+                    <div class="categories-grid">
+                        <div class="cat-card bg-health"><span class="num" id="countHealth">0</span><span class="label">Health Tasks</span></div>
+                        <div class="cat-card bg-work"><span class="num" id="countWork">0</span><span class="label">Work Projects</span></div>
+                        <div class="cat-card bg-mental"><span class="num" id="countMental">0</span><span class="label">Mental Care</span></div>
+                        <div class="cat-card bg-others"><span class="num" id="countTotal">0</span><span class="label">Total Tasks</span></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Tác vụ nổi bật</div>
+                        <div class="task-list" id="dashboardTaskContainer"></div>
+                    </div>
+                </div>
+                <div class="right-column">
+                    <div class="card">
+                        <div class="card-title">Quick Add Task</div>
+                        <form id="taskForm" onsubmit="addNewTask(event)">
+                            <div class="form-group">
+                                <label>Tên công việc</label>
+                                <input type="text" id="taskNameInput" class="form-control" placeholder="Nhập nội dung..." required>
+                            </div>
+                            <div class="form-group">
+                                <label>Danh mục</label>
+                                <select id="taskCategoryInput" class="form-control">
+                                    <option value="health">Health</option>
+                                    <option value="work">Work</option>
+                                    <option value="mental">Mental</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Mức độ ưu tiên</label>
+                                <select id="taskPriorityInput" class="form-control">
+                                    <option value="p-low">Low</option>
+                                    <option value="p-medium">Medium</option>
+                                    <option value="p-high">High</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn-submit">Khởi tạo công việc</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="panel-tasks" class="tab-panel">
+            <div class="header-panel">
+                <div class="header-title">
+                    <h1>All Saved Tasks</h1>
+                    <p>Nơi hiển thị và quản lý toàn bộ cơ sở dữ liệu công việc đã lưu trữ.</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">Quản lý dữ liệu công việc</div>
+                <div class="task-list" id="allTasksContainer"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // ĐÃ BỎ localStorage - giờ dữ liệu lấy trực tiếp từ MySQL qua API /tasks của backend C++
+        let tasks = [];
+        const api = '/tasks';
+
+        async function loadTasks() {
+            try {
+                const res = await fetch(api);
+                tasks = await res.json();
+            } catch (err) {
+                console.error('Khong the tai du lieu tu server:', err);
+                tasks = [];
+            }
+            renderAll();
+        }
+
+        window.onload = function() {
+            loadTasks();
+        };
+
+        // Hàm chuyển đổi qua lại giữa các tab menu
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+            document.querySelectorAll('.menu-item').forEach(item => item.classList.remove('active'));
+            if(tabName === 'dashboard') {
+                document.getElementById('panel-dashboard').classList.add('active');
+                document.getElementById('menu-dashboard').classList.add('active');
+            } else if(tabName === 'tasks') {
+                document.getElementById('panel-tasks').classList.add('active');
+                document.getElementById('menu-tasks').classList.add('active');
+            }
+            renderAll();
+        }
+        function updateCounters() {
+            document.getElementById('countHealth').innerText = tasks.filter(t => t.category === 'health').length;
+            document.getElementById('countWork').innerText = tasks.filter(t => t.category === 'work').length;
+            document.getElementById('countMental').innerText = tasks.filter(t => t.category === 'mental').length;
+            document.getElementById('countTotal').innerText = tasks.length;
+        }
+        // Hàm đa năng vẽ giao diện cho cả 2 màn hình cùng lúc
+        function renderAll() {
+            updateCounters();
+            const dbContainer = document.getElementById('dashboardTaskContainer');
+            const allContainer = document.getElementById('allTasksContainer');
+            dbContainer.innerHTML = '';
+            allContainer.innerHTML = '';
+            tasks.forEach(task => {
+                let pLabel = task.priority === 'p-high' ? 'High' : (task.priority === 'p-medium' ? 'Medium' : 'Low');
+                const htmlContent = `
+                    <div class="task-left" onclick="toggleTask(${task.id})">
+                        <div class="checkbox"></div>
+                        <span class="task-text">${task.name}</span>
+                    </div>
+                    <div class="task-right">
+                        <span class="priority-badge ${task.priority}">${pLabel}</span>
+                        <button class="btn-delete" onclick="event.stopPropagation(); deleteTask(${task.id})">
+                            <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                        </button>
+                    </div>
+                `;
+                const itemDB = document.createElement('div');
+                itemDB.className = `task-item ${task.completed ? 'checked' : ''}`;
+                itemDB.innerHTML = htmlContent;
+                dbContainer.appendChild(itemDB);
+                const itemAll = document.createElement('div');
+                itemAll.className = `task-item ${task.completed ? 'checked' : ''}`;
+                itemAll.innerHTML = htmlContent;
+                allContainer.appendChild(itemAll);
+            });
+        }
+        // Thêm task mới -> gọi POST /tasks, backend lưu vào MySQL
+        async function addNewTask(e) {
+            e.preventDefault();
+            const name = document.getElementById('taskNameInput').value.trim();
+            const category = document.getElementById('taskCategoryInput').value;
+            const priority = document.getElementById('taskPriorityInput').value;
+            if (!name) return;
+            await fetch(api, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name, category, priority })
+            });
+            document.getElementById('taskForm').reset();
+            await loadTasks();
+        }
+        // Đánh dấu hoàn thành -> gọi PUT /tasks/:id
+        async function toggleTask(id) {
+            await fetch(`${api}/${id}`, { method: 'PUT' });
+            await loadTasks();
+        }
+        // Xoá task -> gọi DELETE /tasks/:id
+        async function deleteTask(id) {
+            await fetch(`${api}/${id}`, { method: 'DELETE' });
+            await loadTasks();
+        }
+    </script>
+</body>
+</html>
