@@ -1,0 +1,7 @@
+# Không commit file cấu hình chứa thông tin nhạy cảm
+.env
+
+# File build
+*.o
+*.obj
+app.exe

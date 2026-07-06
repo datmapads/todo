@@ -1,6 +1,7 @@
 #define _WIN32_WINNT 0x0A00
 #include "httplib.h"
 #include "json.hpp"
+#include "dotenv.h"
 #include <mysql.h>
 #include <windows.h>
 #include <string>
@@ -9,11 +10,31 @@
 using json = nlohmann::json;
 
 // ================== CẤU HÌNH KẾT NỐI DATABASE ==================
-static const char *DB_HOST = "127.0.0.1";
-static const char *DB_USER = "root";
-static const char *DB_PASS = "datdjay123";
-static const char *DB_NAME = "todo_db";
-static const unsigned int DB_PORT = 3306;
+// Các giá trị nhạy cảm (host/user/password/database/port) KHÔNG còn
+// hard-code trong mã nguồn. Chúng được nạp từ file ".env" (không commit
+// lên git, xem ".env.example" để biết định dạng) thông qua dotenv.h.
+// Nếu thiếu ".env", giá trị mặc định bên dưới chỉ dùng để chạy thử cục bộ.
+static std::string DB_HOST;
+static std::string DB_USER;
+static std::string DB_PASS;
+static std::string DB_NAME;
+static unsigned int DB_PORT;
+
+void LoadDbConfig()
+{
+    bool loaded = dotenv::load(".env");
+    if (!loaded)
+    {
+        std::cerr << "[LoadDbConfig] Khong tim thay file .env, se dung gia tri mac dinh.\n"
+                     "    Hay tao file .env dua tren .env.example de cau hinh CSDL.\n";
+    }
+
+    DB_HOST = dotenv::get("DB_HOST", "127.0.0.1");
+    DB_USER = dotenv::get("DB_USER", "root");
+    DB_PASS = dotenv::get("DB_PASS", "");
+    DB_NAME = dotenv::get("DB_NAME", "todo_db");
+    DB_PORT = static_cast<unsigned int>(std::stoul(dotenv::get("DB_PORT", "3306")));
+}
 // =================================================================
 
 // ---------- Định nghĩa con trỏ hàm MySQL (nạp động từ libmysql.dll) ----------
@@ -98,7 +119,7 @@ MYSQL *ConnectDB()
         p_mysql_ssl_set(conn, nullptr, nullptr, nullptr, nullptr, nullptr);
     }
 
-    if (!p_mysql_real_connect(conn, DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT, nullptr, 0))
+    if (!p_mysql_real_connect(conn, DB_HOST.c_str(), DB_USER.c_str(), DB_PASS.c_str(), DB_NAME.c_str(), DB_PORT, nullptr, 0))
     {
         std::cerr << "[ConnectDB] Loi ket noi MySQL: " << p_mysql_error(conn) << std::endl;
         p_mysql_close(conn);
@@ -192,6 +213,8 @@ bool DeleteTask(int id)
 
 int main()
 {
+    LoadDbConfig();
+
     MYSQL *test = ConnectDB();
     if (test)
     {
