@@ -2,11 +2,11 @@
 #include "httplib.h"
 #include "json.hpp"
 #include "dotenv.h"
-#include <mysql.h>
+#include "C:\\Program Files\\MySQL\\MySQL Server 8.0\\include\\mysql.h"
 #include <windows.h>
 #include <string>
 #include <iostream>
-
+#include "services/TaskService.h"
 using json = nlohmann::json;
 
 // ================== CẤU HÌNH KẾT NỐI DATABASE ==================
@@ -34,6 +34,7 @@ void LoadDbConfig()
     DB_PASS = dotenv::get("DB_PASS", "");
     DB_NAME = dotenv::get("DB_NAME", "todo_db");
     DB_PORT = static_cast<unsigned int>(std::stoul(dotenv::get("DB_PORT", "3306")));
+
 }
 // =================================================================
 
@@ -136,83 +137,10 @@ std::string Escape(MYSQL *conn, const std::string &input)
     return out;
 }
 
-json GetTasks()
-{
-    json arr = json::array();
-    MYSQL *conn = ConnectDB();
-    if (!conn)
-        return arr;
-
-    if (p_mysql_query(conn, "SELECT id, name, category, priority, completed FROM tasks ORDER BY id"))
-    {
-        std::cerr << "[GetTasks] Query loi: " << p_mysql_error(conn) << std::endl;
-        p_mysql_close(conn);
-        return arr;
-    }
-    MYSQL_RES *res = p_mysql_store_result(conn);
-    if (res)
-    {
-        MYSQL_ROW row;
-        while ((row = p_mysql_fetch_row(res)))
-        {
-            json obj;
-            obj["id"] = std::stoi(row[0]);
-            obj["name"] = row[1] ? row[1] : "";
-            obj["category"] = row[2] ? row[2] : "";
-            obj["priority"] = row[3] ? row[3] : "";
-            obj["completed"] = row[4] && std::string(row[4]) == "1";
-            arr.push_back(obj);
-        }
-        p_mysql_free_result(res);
-    }
-    p_mysql_close(conn);
-    return arr;
-}
-
-bool AddTask(const std::string &name, const std::string &category, const std::string &priority)
-{
-    MYSQL *conn = ConnectDB();
-    if (!conn)
-        return false;
-
-    std::string q = "INSERT INTO tasks (name, category, priority, completed) VALUES ('" +
-                    Escape(conn, name) + "','" + Escape(conn, category) + "','" +
-                    Escape(conn, priority) + "', 0)";
-    int ret = p_mysql_query(conn, q.c_str());
-    if (ret)
-        std::cerr << "[AddTask] Loi: " << p_mysql_error(conn) << std::endl;
-    p_mysql_close(conn);
-    return ret == 0;
-}
-
-bool ToggleTask(int id)
-{
-    MYSQL *conn = ConnectDB();
-    if (!conn)
-        return false;
-    std::string q = "UPDATE tasks SET completed = 1 - completed WHERE id = " + std::to_string(id);
-    int ret = p_mysql_query(conn, q.c_str());
-    if (ret)
-        std::cerr << "[ToggleTask] Loi: " << p_mysql_error(conn) << std::endl;
-    p_mysql_close(conn);
-    return ret == 0;
-}
-
-bool DeleteTask(int id)
-{
-    MYSQL *conn = ConnectDB();
-    if (!conn)
-        return false;
-    std::string q = "DELETE FROM tasks WHERE id = " + std::to_string(id);
-    int ret = p_mysql_query(conn, q.c_str());
-    if (ret)
-        std::cerr << "[DeleteTask] Loi: " << p_mysql_error(conn) << std::endl;
-    p_mysql_close(conn);
-    return ret == 0;
-}
 
 int main()
 {
+    TaskService taskService;
     LoadDbConfig();
 
     MYSQL *test = ConnectDB();
@@ -223,10 +151,11 @@ int main()
     }
     else
     {
+        std::cout << "[main] Loi ket noi MySQL: " << DB_HOST << ":" << DB_PORT << "/" << DB_NAME << " with user " << DB_USER << " and password " << DB_PASS << std::endl;
         std::cerr << "!!! KHONG ket noi duoc MySQL. Server van chay nhung cac API se loi.\n"
                      "    Kiem tra lai:\n"
                      "    1) MySQL server (XAMPP/Service) da BAT chua?\n"
-                     "    2) User 'root' / pass 'datdjay123' co dung voi MySQL tren may nay khong?\n"
+                     "    2) User 'root' / pass 'Gasama060222@' co dung voi MySQL tren may nay khong?\n"
                      "    3) Database 'todo_db' va bang 'tasks' da duoc tao chua? (xem file schema.sql)\n";
     }
 
@@ -235,56 +164,82 @@ int main()
     // Phục vụ file tĩnh (index.html, css, js...) nằm cùng thư mục với main.cpp / file .exe
     svr.set_mount_point("/", "./");
 
-    svr.Get("/tasks", [](const httplib::Request &, httplib::Response &res)
-            {
-        json tasks = GetTasks();
-        res.set_content(tasks.dump(), "application/json"); });
+   svr.Get("/tasks",[&taskService]
+                (const httplib::Request&,
+                httplib::Response& res)
+                {
+                    res.set_content(
+                        taskService
+                            .getTasks()
+                            .dump(),
+                        "application/json"
+                    );
+                });
 
-    svr.Post("/tasks", [](const httplib::Request &req, httplib::Response &res)
-             {
-        try {
-            auto data = json::parse(req.body);
-            std::string name = data.value("name", "");
-            std::string category = data.value("category", "");
-            std::string priority = data.value("priority", "");
-            if (name.empty()) {
-                res.status = 400;
-                res.set_content("{\"error\":\"name khong duoc rong\"}", "application/json");
-                return;
-            }
-            bool ok = AddTask(name, category, priority);
-            res.status = ok ? 201 : 500;
-            res.set_content(ok ? "{\"status\":\"ok\"}" : "{\"error\":\"insert that bai\"}", "application/json");
-        } catch (const std::exception &e) {
-            res.status = 400;
-            res.set_content(std::string("{\"error\":\"") + e.what() + "\"}", "application/json");
-        } });
+    svr.Post("/tasks",[&taskService]
+            (const httplib::Request& req,
+            httplib::Response& res)
+            {
+                try
+                {
+                    auto data =
+                        json::parse(req.body);
+
+                    bool ok =
+                        taskService.addTask(
+                            data.value("name",""),
+                            data.value("category",""),
+                            data.value("priority","")
+                        );
+
+                    res.status =
+                        ok ? 201 : 500;
+
+                    res.set_content(
+                        ok
+                        ? "{\"status\":\"ok\"}"
+                        : "{\"error\":\"insert failed\"}",
+                        "application/json"
+                    );
+                }
+                catch(...)
+                {
+                    res.status = 400;
+                }
+            });
 
     // Luu y: httplib 0.12.3 khong ho tro cu phap ":id" + path_params (chi co o ban moi hon).
     // Ban nay dung regex thuan cho route, nen phai bat id bang capture group (\d+) va lay qua req.matches[1].
-    svr.Put(R"(/tasks/(\d+))", [](const httplib::Request &req, httplib::Response &res)
+    svr.Put(R"(/tasks/(\d+))",[&taskService]
+            (const httplib::Request& req,
+            httplib::Response& res)
             {
-        try {
-            int id = std::stoi(req.matches[1].str());
-            bool ok = ToggleTask(id);
-            res.status = ok ? 200 : 500;
-            res.set_content(ok ? "{\"status\":\"ok\"}" : "{\"error\":\"update that bai\"}", "application/json");
-        } catch (...) {
-            res.status = 400;
-            res.set_content("{\"error\":\"id khong hop le\"}", "application/json");
-        } });
+                int id =
+                    std::stoi(
+                        req.matches[1].str()
+                    );
 
-    svr.Delete(R"(/tasks/(\d+))", [](const httplib::Request &req, httplib::Response &res)
-               {
-        try {
-            int id = std::stoi(req.matches[1].str());
-            bool ok = DeleteTask(id);
-            res.status = ok ? 200 : 500;
-            res.set_content(ok ? "{\"status\":\"ok\"}" : "{\"error\":\"delete that bai\"}", "application/json");
-        } catch (...) {
-            res.status = 400;
-            res.set_content("{\"error\":\"id khong hop le\"}", "application/json");
-        } });
+                bool ok =
+                    taskService.toggleTask(id);
+
+                res.status =
+                    ok ? 200 : 500;
+            });
+    svr.Delete(R"(/tasks/(\d+))",[&taskService]
+                (const httplib::Request& req,
+                httplib::Response& res)
+                {
+                    int id =
+                        std::stoi(
+                            req.matches[1].str()
+                        );
+
+                    bool ok =
+                        taskService.deleteTask(id);
+
+                    res.status =
+                        ok ? 200 : 500;
+                });
 
     std::cout << "Server dang chay tai http://localhost:8080 (va http://127.0.0.1:8080)\n";
     // Dung "0.0.0.0" thay vi "localhost" de ep bind IPv4 ro rang,
