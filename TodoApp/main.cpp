@@ -191,37 +191,38 @@ int main()
                     );
                 });
 
-    svr.Post("/tasks",[&taskService]
-            (const httplib::Request& req,
-            httplib::Response& res)
+    svr.Post("/api/login",[](const httplib::Request& req,
+        httplib::Response& res)
+        {
+            auto data = json::parse(req.body);
+
+            std::string user =
+                data.value("username","");
+
+            std::string pass =
+                data.value("password","");
+
+            if(user == "admin" &&
+            pass == "123456")
             {
-                try
-                {
-                    auto data =
-                        json::parse(req.body);
+                json result;
+                result["username"] = user;
 
-                    bool ok =
-                        taskService.addTask(
-                            data.value("name",""),
-                            data.value("category",""),
-                            data.value("priority","")
-                        );
+                res.set_content(
+                    result.dump(),
+                    "application/json"
+                );
+            }
+            else
+            {
+                res.status = 401;
 
-                    res.status =
-                        ok ? 201 : 500;
-
-                    res.set_content(
-                        ok
-                        ? "{\"status\":\"ok\"}"
-                        : "{\"error\":\"insert failed\"}",
-                        "application/json"
-                    );
-                }
-                catch(...)
-                {
-                    res.status = 400;
-                }
-            });
+                res.set_content(
+                    R"({"error":"Sai tài khoản hoặc mật khẩu"})",
+                    "application/json"
+                );
+            }
+        });
 
     // Luu y: httplib 0.12.3 khong ho tro cu phap ":id" + path_params (chi co o ban moi hon).
     // Ban nay dung regex thuan cho route, nen phai bat id bang capture group (\d+) va lay qua req.matches[1].
