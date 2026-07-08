@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskFlow — Phiên bản 2.1: Mục tiêu công việc</title>
+<style>
+    :root {
+        --bg: #f5f6fb;
+        --surface: #ffffff;
+        --border: #e6e8f0;
+        --text: #1a1d29;
+        --text-muted: #6b7085;
+        --primary: #5b5bf5;
+        --primary-dark: #4646d6;
+        --primary-soft: #edecff;
+        --success: #17b26a;
+        --success-soft: #e6f9ef;
+        --warning: #f79009;
+        --warning-soft: #fef3e0;
+        --danger: #f04438;
+        --danger-soft: #fde8e6;
+        --radius-lg: 20px;
+        --radius-md: 14px;
+        --radius-sm: 10px;
+        --shadow: 0 8px 24px rgba(24, 27, 45, 0.06);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+
+    /* ===================== AUTH SCREEN ===================== */
+    #authScreen { height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 20% 20%, #eeedff, var(--bg) 60%); }
+    .auth-card { width: 380px; max-width: 92vw; background: var(--surface); border-radius: var(--radius-lg); box-shadow: 0 20px 60px rgba(24,27,45,.1); padding: 36px 32px; }
+    .auth-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+    .brand-mark { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg, var(--primary), #8b7bf7); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 17px; flex-shrink: 0; }
+    .auth-logo b { font-size: 19px; font-weight: 800; }
+    .auth-card h2 { font-size: 21px; font-weight: 800; margin-bottom: 4px; }
+    .auth-card p.sub { color: var(--text-muted); font-size: 13.5px; margin-bottom: 22px; }
+    .form-group { margin-bottom: 14px; display: flex; flex-direction: column; gap: 6px; }
+    .form-group label { font-size: 13px; font-weight: 700; color: var(--text-muted); }
+    .form-control { width: 100%; padding: 11px 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); background: var(--bg); font-size: 14px; outline: none; }
+    .form-control:focus { border-color: var(--primary); background: #fff; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; border: none; border-radius: var(--radius-sm); font-weight: 700; font-size: 14px; cursor: pointer; padding: 12px 18px; transition: .15s; white-space: nowrap; }
+    .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 4px 14px rgba(91,91,245,.3); width: 100%; justify-content: center; margin-top: 6px; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+    .auth-switch { text-align: center; margin-top: 18px; font-size: 13.5px; color: var(--text-muted); }
+    .auth-switch a { color: var(--primary); font-weight: 700; cursor: pointer; text-decoration: none; }
+    .auth-error { background: var(--danger-soft); color: var(--danger); font-size: 13px; font-weight: 600; padding: 10px 12px; border-radius: var(--radius-sm); margin-bottom: 14px; display: none; }
+    .auth-error.show { display: block; }
+
+    /* ===================== APP SHELL ===================== */
+    #appShell { display: none; height: 100vh; }
+    #appShell.visible { display: flex; }
+
+    .sidebar { width: 250px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px 18px; gap: 24px; }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+    .brand-text { font-size: 17px; font-weight: 800; }
+    .brand-text small { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); }
+    .nav { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: var(--radius-sm); color: var(--text-muted); font-weight: 600; font-size: 14px; text-decoration: none; cursor: pointer; transition: .15s; border: none; background: none; width: 100%; text-align: left; }
+    .nav-item:hover { background: var(--bg); color: var(--text); }
+    .nav-item.active { background: var(--primary-soft); color: var(--primary); }
+    .nav-item svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; flex-shrink: 0; }
+    .user-card { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: var(--radius-sm); background: var(--bg); }
+    .user-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--primary-soft); color: var(--primary); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; flex-shrink: 0; }
+    .user-info { flex: 1; min-width: 0; }
+    .user-info b { font-size: 13.5px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .user-info span { font-size: 11.5px; color: var(--text-muted); }
+    .btn-logout { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: 8px; flex-shrink: 0; }
+    .btn-logout:hover { color: var(--danger); background: var(--danger-soft); }
+    .btn-logout svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; }
+
+    .main { flex: 1; overflow-y: auto; padding: 32px 40px 60px; }
+    .topbar { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; gap: 20px; }
+    .topbar h1 { font-size: 26px; font-weight: 800; }
+    .topbar p { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+    .btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 28px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow); }
+    .stat-card .icon-badge { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+    .stat-card .icon-badge svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
+    .stat-card .num { font-size: 26px; font-weight: 800; }
+    .stat-card .label { font-size: 13px; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
+    .tone-total .icon-badge { background: var(--primary-soft); color: var(--primary); }
+    .tone-done .icon-badge { background: var(--success-soft); color: var(--success); }
+    .tone-pending .icon-badge { background: var(--warning-soft); color: var(--warning); }
+    .tone-high .icon-badge { background: var(--danger-soft); color: var(--danger); }
+
+    .content-grid { display: grid; grid-template-columns: 1fr 300px; gap: 24px; align-items: start; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: 22px; }
+    .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+    .card-head h2 { font-size: 16px; font-weight: 800; }
+    .filter-tabs { display: flex; gap: 6px; background: var(--bg); padding: 4px; border-radius: 10px; }
+    .filter-tab { border: none; background: none; padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; color: var(--text-muted); cursor: pointer; }
+    .filter-tab.active { background: var(--surface); color: var(--primary); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+
+    .task-list { display: flex; flex-direction: column; gap: 10px; }
+    .task-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--radius-md); background: var(--bg); border: 1px solid transparent; transition: .15s; }
+    .task-item:hover { border-color: var(--border); }
+    .checkbox { width: 22px; height: 22px; border-radius: 7px; border: 2px solid #d3d5e0; flex-shrink: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: .15s; }
+    .task-item.checked .checkbox { background: var(--primary); border-color: var(--primary); }
+    .task-item.checked .checkbox::after { content: "✓"; color: #fff; font-size: 12px; font-weight: 800; }
+    .task-body { flex: 1; min-width: 0; cursor: pointer; }
+    .task-name { font-weight: 600; font-size: 14.5px; }
+    .task-item.checked .task-name { text-decoration: line-through; color: var(--text-muted); }
+    .task-meta { display: flex; gap: 8px; margin-top: 4px; }
+    .chip { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; text-transform: capitalize; }
+    .cat-health { background: #eef1fe; color: #4461ff; }
+    .cat-work { background: var(--success-soft); color: var(--success); }
+    .cat-mental { background: #fceef3; color: #ec4899; }
+    .cat-others, .cat-other { background: #f2f2f4; color: #636366; }
+    .p-p-high { background: var(--danger-soft); color: var(--danger); }
+    .p-p-medium { background: var(--warning-soft); color: var(--warning); }
+    .p-p-low { background: var(--success-soft); color: var(--success); }
+    .btn-icon { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 7px; border-radius: 8px; display: flex; opacity: .6; transition: .15s; flex-shrink: 0; }
+    .btn-icon:hover { opacity: 1; background: var(--danger-soft); color: var(--danger); }
+    .btn-icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; }
+
+    .empty-state { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 50px 20px; color: var(--text-muted); }
+    .empty-state svg { width: 52px; height: 52px; stroke: var(--border); stroke-width: 1.5; fill: none; margin-bottom: 14px; }
+    .empty-state b { color: var(--text); font-size: 14px; }
+    .empty-state span { font-size: 13px; margin-top: 4px; }
+
+    .cat-summary-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed var(--border); font-size: 13.5px; }
+    .cat-summary-item:last-child { border-bottom: none; }
+    .cat-summary-item .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+    .progress-track { width: 100%; height: 8px; background: var(--bg); border-radius: 8px; overflow: hidden; margin-top: 16px; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #8b7bf7); border-radius: 8px; transition: width .3s; }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(20, 22, 35, .45); display: none; align-items: center; justify-content: center; z-index: 50; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border-radius: var(--radius-lg); padding: 26px; width: 400px; max-width: 92vw; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+    .modal h3 { font-size: 18px; font-weight: 800; margin-bottom: 18px; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+    .btn-ghost { background: var(--bg); color: var(--text); flex: 1; justify-content: center; }
+    .btn-ghost:hover { background: var(--border); }
+    .modal .btn-primary { flex: 1; margin-top: 0; }
+
+    .toast-wrap { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 100; }
+    .toast { background: var(--text); color: #fff; padding: 12px 18px; border-radius: var(--radius-sm); font-size: 13.5px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.2); animation: toast-in .2s ease; }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    @media (max-width: 980px) {
+        .content-grid { grid-template-columns: 1fr; }
+        .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+</style>
+</head>
+<body>
+
+<!-- ===================== MAN HINH DANG NHAP / DANG KY ===================== -->
+<div id="authScreen">
+    <div class="auth-card">
+        <div class="auth-logo"><div class="brand-mark">TF</div><b>TaskFlow</b></div>
+        <div id="authError" class="auth-error"></div>
+
+        <div id="loginPane">
+            <h2>Đăng nhập</h2>
+            <p class="sub">Đăng nhập để quản lý công việc của riêng bạn.</p>
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group"><label>Tên đăng nhập</label><input type="text" id="loginUsername" class="form-control" required autocomplete="username"></div>
+                <div class="form-group"><label>Mật khẩu</label><input type="password" id="loginPassword" class="form-control" required autocomplete="current-password"></div>
+                <button type="submit" class="btn btn-primary" id="loginBtn">Đăng nhập</button>
+            </form>
+            <div class="auth-switch">Chưa có tài khoản? <a onclick="showPane('register')">Đăng ký ngay</a></div>
+        </div>
+
+        <div id="registerPane" style="display:none;">
+            <h2>Tạo tài khoản</h2>
+            <p class="sub">Tên đăng nhập ≥ 3 ký tự, mật khẩu ≥ 4 ký tự.</p>
+            <form onsubmit="handleRegister(event)">
+                <div class="form-group"><label>Tên đăng nhập</label><input type="text" id="regUsername" class="form-control" required autocomplete="username"></div>
+                <div class="form-group"><label>Mật khẩu</label><input type="password" id="regPassword" class="form-control" required autocomplete="new-password"></div>
+                <button type="submit" class="btn btn-primary" id="registerBtn">Đăng ký</button>
+            </form>
+            <div class="auth-switch">Đã có tài khoản? <a onclick="showPane('login')">Đăng nhập</a></div>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== GIAO DIEN CHINH SAU KHI DANG NHAP ===================== -->
+<div id="appShell">
+    <div class="sidebar">
+        <div class="brand">
+            <div class="brand-mark">TF</div>
+            <div class="brand-text">TaskFlow<small>Quản lý công việc</small></div>
+        </div>
+        <div class="nav">
+            <button class="nav-item active" id="navDashboard" onclick="switchView('dashboard')">
+                <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+                Tổng quan
+            </button>
+            <button class="nav-item" id="navGoals" onclick="switchView('goals')">
+                <svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+                Mục tiêu
+            </button>
+        </div>
+        <div class="user-card">
+            <div class="user-avatar" id="userAvatar">?</div>
+            <div class="user-info"><b id="userNameLabel">—</b><span>Phiên bản 2.1</span></div>
+            <button class="btn-logout" onclick="handleLogout()" title="Đăng xuất">
+                <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="main">
+        <div id="viewDashboard">
+        <div class="topbar">
+            <div>
+                <h1>Tổng quan công việc</h1>
+                <p id="todayLabel">Hôm nay là ngày ...</p>
+            </div>
+            <button class="btn btn-primary" onclick="openModal()">
+                <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                Thêm công việc
+            </button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card tone-total">
+                <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>
+                <div class="num" id="statTotal">0</div>
+                <div class="label">Tổng số công việc</div>
+            </div>
+            <div class="stat-card tone-done">
+                <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+                <div class="num" id="statDone">0</div>
+                <div class="label">Đã hoàn thành</div>
+            </div>
+            <div class="stat-card tone-pending">
+                <div class="icon-badge"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+                <div class="num" id="statPending">0</div>
+                <div class="label">Đang thực hiện</div>
+            </div>
+            <div class="stat-card tone-high">
+                <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg></div>
+                <div class="num" id="statHigh">0</div>
+                <div class="label">Ưu tiên cao</div>
+            </div>
+        </div>
+
+        <div class="content-grid">
+            <div class="card">
+                <div class="card-head">
+                    <h2>Danh sách công việc</h2>
+                    <div class="filter-tabs">
+                        <button class="filter-tab active" data-filter="all" onclick="setFilter('all')">Tất cả</button>
+                        <button class="filter-tab" data-filter="active" onclick="setFilter('active')">Đang làm</button>
+                        <button class="filter-tab" data-filter="done" onclick="setFilter('done')">Hoàn thành</button>
+                    </div>
+                </div>
+                <div class="task-list" id="taskListContainer"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-head"><h2>Theo danh mục</h2></div>
+                <div class="cat-summary-item"><span><span class="dot" style="background:#4461ff"></span>Health</span><b id="countHealth">0</b></div>
+                <div class="cat-summary-item"><span><span class="dot" style="background:#17b26a"></span>Work</span><b id="countWork">0</b></div>
+                <div class="cat-summary-item"><span><span class="dot" style="background:#ec4899"></span>Mental</span><b id="countMental">0</b></div>
+                <div class="cat-summary-item"><span><span class="dot" style="background:#636366"></span>Khác</span><b id="countOthers">0</b></div>
+                <div class="progress-track"><div class="progress-fill" id="progressBar" style="width:0%"></div></div>
+                <p style="font-size:12px;color:var(--text-muted);margin-top:8px;" id="progressLabel">0% công việc đã hoàn thành</p>
+            </div>
+        </div>
+        </div>
+
+        <div id="viewGoals" style="display:none;">
+            <div class="topbar">
+                <div>
+                    <h1>Mục tiêu của tôi</h1>
+                    <p>Những mục tiêu dài hạn, tách biệt với công việc hằng ngày.</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-head"><h2>Thêm mục tiêu mới</h2></div>
+                <form id="goalForm" onsubmit="addNewGoal(event)" style="display:flex; gap:10px; align-items:flex-end;">
+                    <div class="form-group" style="flex:1; margin-bottom:0;">
+                        <label>Nội dung mục tiêu</label>
+                        <input type="text" id="goalTitleInput" class="form-control" placeholder="Ví dụ: Hoàn thành khóa học C++ trong tháng này" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Thêm</button>
+                </form>
+            </div>
+            <div class="card" style="margin-top:20px;">
+                <div class="card-head"><h2>Danh sách mục tiêu</h2></div>
+                <div class="task-list" id="goalListContainer"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+        <h3>Thêm công việc mới</h3>
+        <form id="taskForm" onsubmit="addNewTask(event)">
+            <div class="form-group">
+                <label>Tên công việc</label>
+                <input type="text" id="taskNameInput" class="form-control" placeholder="Ví dụ: Hoàn thành báo cáo tuần" required>
+            </div>
+            <div class="form-group">
+                <label>Danh mục</label>
+                <select id="taskCategoryInput" class="form-control">
+                    <option value="health">Health</option>
+                    <option value="work">Work</option>
+                    <option value="mental">Mental</option>
+                    <option value="others">Khác</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Mức độ ưu tiên</label>
+                <select id="taskPriorityInput" class="form-control">
+                    <option value="p-low">Thấp</option>
+                    <option value="p-medium">Trung bình</option>
+                    <option value="p-high">Cao</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-ghost" onclick="closeModal()">Hủy</button>
+                <button type="submit" class="btn btn-primary">Lưu công việc</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+let tasks = [];
+let currentFilter = 'all';
+let currentUsername = '';
+const api = '/tasks';
+
+const dayNames = ['Chủ nhật','Thứ 2','Thứ 3','Thứ 4','Thứ 5','Thứ 6','Thứ 7'];
+
+async function init() {
+    try {
+        const res = await fetch('/api/me');
+        if (res.ok) {
+            const data = await res.json();
+            enterApp(data.username);
+            return;
+        }
+    } catch (err) { /* server chua san sang, roi vao man hinh dang nhap */ }
+    document.getElementById('authScreen').style.display = 'flex';
+}
+window.onload = init;
+
+function enterApp(username) {
+    currentUsername = username;
+    document.getElementById('authScreen').style.display = 'none';
+    document.getElementById('appShell').classList.add('visible');
+    document.getElementById('userNameLabel').textContent = username;
+    document.getElementById('userAvatar').textContent = username.charAt(0).toUpperCase();
+    document.getElementById('todayLabel').textContent =
+        'Hôm nay là ' + dayNames[new Date().getDay()] + ', ' + new Date().toLocaleDateString('vi-VN');
+    loadTasks();
+}
+
+function switchView(view) {
+    document.getElementById('navDashboard').classList.toggle('active', view === 'dashboard');
+    document.getElementById('navGoals').classList.toggle('active', view === 'goals');
+    document.getElementById('viewDashboard').style.display = view === 'dashboard' ? '' : 'none';
+    document.getElementById('viewGoals').style.display = view === 'goals' ? '' : 'none';
+    if (view === 'goals') loadGoals();
+}
+
+let goals = [];
+const goalsApi = '/goals';
+
+async function loadGoals() {
+    try {
+        const res = await fetch(goalsApi);
+        if (res.status === 401) { handleLogout(); return; }
+        goals = await res.json();
+    } catch (err) {
+        showToast('Không thể kết nối tới server');
+        goals = [];
+    }
+    renderGoals();
+}
+
+function renderGoals() {
+    const container = document.getElementById('goalListContainer');
+    container.innerHTML = '';
+
+    if (goals.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>
+                <b>Chưa có mục tiêu nào</b>
+                <span>Thêm mục tiêu dài hạn để theo dõi tiến trình của bạn.</span>
+            </div>`;
+        return;
+    }
+
+    goals.forEach(goal => {
+        const el = document.createElement('div');
+        el.className = `task-item ${goal.done ? 'checked' : ''}`;
+        el.innerHTML = `
+            <div class="checkbox" onclick="toggleGoal(${goal.id})"></div>
+            <div class="task-body" onclick="toggleGoal(${goal.id})">
+                <div class="task-name">${escapeHtml(goal.title)}</div>
+            </div>
+            <button class="btn-icon" onclick="deleteGoal(${goal.id})" title="Xóa">
+                <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6"/></svg>
+            </button>`;
+        container.appendChild(el);
+    });
+}
+
+async function addNewGoal(e) {
+    e.preventDefault();
+    const title = document.getElementById('goalTitleInput').value.trim();
+    if (!title) return;
+    await fetch(goalsApi, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ title })
+    });
+    document.getElementById('goalForm').reset();
+    showToast('Đã thêm mục tiêu mới');
+    await loadGoals();
+}
+
+async function toggleGoal(id) {
+    await fetch(`${goalsApi}/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: '{}' });
+    await loadGoals();
+}
+
+async function deleteGoal(id) {
+    await fetch(`${goalsApi}/${id}`, { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: '{}' });
+    showToast('Đã xóa mục tiêu');
+    await loadGoals();
+}
+
+function showPane(name) {
+    document.getElementById('authError').classList.remove('show');
+    document.getElementById('loginPane').style.display = name === 'login' ? 'block' : 'none';
+    document.getElementById('registerPane').style.display = name === 'register' ? 'block' : 'none';
+}
+
+function showAuthError(msg) {
+    const el = document.getElementById('authError');
+    el.style.background = '';
+    el.style.color = '';
+    el.textContent = msg;
+    el.classList.add('show');
+}
+
+function showAuthSuccess(msg) {
+    const el = document.getElementById('authError');
+    el.style.background = 'var(--success-soft)';
+    el.style.color = 'var(--success)';
+    el.textContent = msg;
+    el.classList.add('show');
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true;
+    try {
+        const res = await fetch('/api/login', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (!res.ok) { showAuthError(data.error || 'Đăng nhập thất bại'); return; }
+        enterApp(data.username);
+    } catch (err) {
+        showAuthError('Không thể kết nối tới server');
+    } finally { btn.disabled = false; }
+}
+
+async function handleRegister(e) {
+    e.preventDefault();
+    const username = document.getElementById('regUsername').value.trim();
+    const password = document.getElementById('regPassword').value;
+    const btn = document.getElementById('registerBtn');
+    btn.disabled = true;
+    try {
+        const res = await fetch('/api/register', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (!res.ok) { showAuthError(data.error || 'Đăng ký thất bại'); return; }
+        showPane('login');
+        document.getElementById('loginUsername').value = username;
+        showAuthSuccess('Đăng ký thành công, hãy đăng nhập');
+    } catch (err) {
+        showAuthError('Không thể kết nối tới server');
+    } finally { btn.disabled = false; }
+}
+
+async function handleLogout() {
+    // httplib doi hoi Content-Length cho POST/PUT/DELETE nen luon gui kem body rong.
+    await fetch('/api/logout', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' });
+    document.getElementById('appShell').classList.remove('visible');
+    document.getElementById('authScreen').style.display = 'flex';
+    showPane('login');
+}
+
+async function loadTasks() {
+    try {
+        const res = await fetch(api);
+        if (res.status === 401) { handleLogout(); return; }
+        tasks = await res.json();
+    } catch (err) {
+        showToast('Không thể kết nối tới server');
+        tasks = [];
+    }
+    renderAll();
+}
+
+function setFilter(f) {
+    currentFilter = f;
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.toggle('active', t.dataset.filter === f));
+    renderAll();
+}
+
+function renderAll() {
+    const total = tasks.length;
+    const done = tasks.filter(t => t.completed).length;
+    const high = tasks.filter(t => t.priority === 'p-high' && !t.completed).length;
+
+    document.getElementById('statTotal').textContent = total;
+    document.getElementById('statDone').textContent = done;
+    document.getElementById('statPending').textContent = total - done;
+    document.getElementById('statHigh').textContent = high;
+
+    document.getElementById('countHealth').textContent = tasks.filter(t => t.category === 'health').length;
+    document.getElementById('countWork').textContent = tasks.filter(t => t.category === 'work').length;
+    document.getElementById('countMental').textContent = tasks.filter(t => t.category === 'mental').length;
+    document.getElementById('countOthers').textContent = tasks.filter(t => !['health','work','mental'].includes(t.category)).length;
+
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    document.getElementById('progressBar').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent = pct + '% công việc đã hoàn thành';
+
+    const container = document.getElementById('taskListContainer');
+    container.innerHTML = '';
+    const visible = tasks.filter(t => currentFilter === 'all' || (currentFilter === 'active' && !t.completed) || (currentFilter === 'done' && t.completed));
+
+    if (visible.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                <b>Chưa có công việc nào</b>
+                <span>Nhấn "Thêm công việc" để bắt đầu quản lý danh sách của bạn.</span>
+            </div>`;
+        return;
+    }
+
+    visible.forEach(task => {
+        const pLabel = task.priority === 'p-high' ? 'Cao' : (task.priority === 'p-medium' ? 'Trung bình' : 'Thấp');
+        const el = document.createElement('div');
+        el.className = `task-item ${task.completed ? 'checked' : ''}`;
+        el.innerHTML = `
+            <div class="checkbox" onclick="toggleTask(${task.id})"></div>
+            <div class="task-body" onclick="toggleTask(${task.id})">
+                <div class="task-name">${escapeHtml(task.name)}</div>
+                <div class="task-meta">
+                    <span class="chip cat-${task.category || 'others'}">${task.category || 'khác'}</span>
+                    <span class="chip ${task.priority}">${pLabel}</span>
+                </div>
+            </div>
+            <button class="btn-icon" onclick="deleteTask(${task.id})" title="Xóa">
+                <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6"/></svg>
+            </button>`;
+        container.appendChild(el);
+    });
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function openModal() { document.getElementById('modalOverlay').classList.add('open'); document.getElementById('taskNameInput').focus(); }
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); document.getElementById('taskForm').reset(); }
+document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target.id === 'modalOverlay') closeModal(); });
+
+async function addNewTask(e) {
+    e.preventDefault();
+    const name = document.getElementById('taskNameInput').value.trim();
+    const category = document.getElementById('taskCategoryInput').value;
+    const priority = document.getElementById('taskPriorityInput').value;
+    if (!name) return;
+    await fetch(api, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ name, category, priority })
+    });
+    closeModal();
+    showToast('Đã thêm công việc mới');
+    await loadTasks();
+}
+
+async function toggleTask(id) {
+    await fetch(`${api}/${id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: '{}' });
+    await loadTasks();
+}
+
+async function deleteTask(id) {
+    await fetch(`${api}/${id}`, { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: '{}' });
+    showToast('Đã xóa công việc');
+    await loadTasks();
+}
+
+function showToast(msg) {
+    const wrap = document.getElementById('toastWrap');
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    wrap.appendChild(t);
+    setTimeout(() => t.remove(), 2500);
+}
+</script>
+</body>
+</html>
