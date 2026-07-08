@@ -1,20 +1,8 @@
 #include "TaskService.h"
+#include "../MySQLWrapper.h"
 
-#include <mysql.h>
 #include <iostream>
-
-extern MYSQL* ConnectDB();
-extern std::string Escape(
-    MYSQL* conn,
-    const std::string& input
-);
-
-extern mysql_query_t p_mysql_query;
-extern mysql_store_result_t p_mysql_store_result;
-extern mysql_fetch_row_t p_mysql_fetch_row;
-extern mysql_free_result_t p_mysql_free_result;
-extern mysql_close_t p_mysql_close;
-extern mysql_error_t p_mysql_error;
+#include "C:/Program Files/MySQL/MySQL Server 8.0/include/mysql.h"
 
 json TaskService::getTasks()
 {
@@ -39,7 +27,6 @@ json TaskService::getTasks()
             << std::endl;
 
         p_mysql_close(conn);
-
         return arr;
     }
 
@@ -50,10 +37,7 @@ json TaskService::getTasks()
     {
         MYSQL_ROW row;
 
-        while (
-            (row =
-                p_mysql_fetch_row(res))
-        )
+        while ((row = p_mysql_fetch_row(res)))
         {
             arr.push_back({
                 {"id", std::stoi(row[0])},
@@ -87,8 +71,8 @@ bool TaskService::addTask(
 
     std::string query =
         "INSERT INTO tasks "
-        "(name,category,priority,completed)"
-        " VALUES ('" +
+        "(name,category,priority,completed) "
+        "VALUES ('" +
         Escape(conn, name) + "','" +
         Escape(conn, category) + "','" +
         Escape(conn, priority) +
@@ -113,9 +97,7 @@ bool TaskService::addTask(
     return ret == 0;
 }
 
-bool TaskService::toggleTask(
-    int id
-)
+bool TaskService::toggleTask(int id)
 {
     MYSQL* conn = ConnectDB();
 
@@ -134,14 +116,20 @@ bool TaskService::toggleTask(
             query.c_str()
         );
 
+    if (ret)
+    {
+        std::cerr
+            << "[ToggleTask] "
+            << p_mysql_error(conn)
+            << std::endl;
+    }
+
     p_mysql_close(conn);
 
     return ret == 0;
 }
 
-bool TaskService::deleteTask(
-    int id
-)
+bool TaskService::deleteTask(int id)
 {
     MYSQL* conn = ConnectDB();
 
@@ -158,6 +146,14 @@ bool TaskService::deleteTask(
             conn,
             query.c_str()
         );
+
+    if (ret)
+    {
+        std::cerr
+            << "[DeleteTask] "
+            << p_mysql_error(conn)
+            << std::endl;
+    }
 
     p_mysql_close(conn);
 
