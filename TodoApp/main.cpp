@@ -193,7 +193,10 @@ int main()
 
     svr.Post("/api/login",[](const httplib::Request& req,
         httplib::Response& res)
+
         {
+            std::cout << "POST /tasks received" << std::endl;
+            std::cout << req.body << std::endl;
             auto data = json::parse(req.body);
 
             std::string user =
@@ -222,26 +225,54 @@ int main()
                     "application/json"
                 );
             }
+            
         });
+        
+        svr.Post("/tasks",[&taskService]
+    (const httplib::Request& req,
+    httplib::Response& res)
+    {
+        try
+        {
+            auto data = json::parse(req.body);
 
-    // Luu y: httplib 0.12.3 khong ho tro cu phap ":id" + path_params (chi co o ban moi hon).
-    // Ban nay dung regex thuan cho route, nen phai bat id bang capture group (\d+) va lay qua req.matches[1].
-    svr.Put(R"(/tasks/(\d+))",[&taskService]
-            (const httplib::Request& req,
-            httplib::Response& res)
+            bool ok =
+                taskService.addTask(
+                    data.value("name",""),
+                    data.value("category",""),
+                    data.value("priority","")
+                );
+
+            if(ok)
             {
-                int id =
-                    std::stoi(
-                        req.matches[1].str()
-                    );
+                res.status = 201;
+                res.set_content(
+                    R"({"status":"ok"})",
+                    "application/json"
+                );
+            }
+            else
+            {
+                res.status = 500;
+                res.set_content(
+                    R"({"error":"insert failed"})",
+                    "application/json"
+                );
+            }
+        }
+        catch(...)
+        {
+            res.status = 400;
+            res.set_content(
+                R"({"error":"bad request"})",
+                "application/json"
+            );
+        }
+    });
 
-                bool ok =
-                    taskService.toggleTask(id);
-
-                res.status =
-                    ok ? 200 : 500;
-            });
-    svr.Delete(R"(/tasks/(\d+))",[&taskService]
+        // Luu y: httplib 0.12.3 khong ho tro cu phap ":id" + path_params (chi co o ban moi hon).
+        // Ban nay dung regex thuan cho route, nen phai bat id bang capture group (\d+) va lay qua req.matches[1].
+        svr.Put(R"(/tasks/(\d+))",[&taskService]
                 (const httplib::Request& req,
                 httplib::Response& res)
                 {
@@ -251,12 +282,78 @@ int main()
                         );
 
                     bool ok =
-                        taskService.deleteTask(id);
+                        taskService.toggleTask(id);
 
                     res.status =
                         ok ? 200 : 500;
                 });
+        svr.Delete(R"(/tasks/(\d+))",[&taskService]
+                    (const httplib::Request& req,
+                    httplib::Response& res)
+                    {
+                        int id =
+                            std::stoi(
+                                req.matches[1].str()
+                            );
 
+                        bool ok =
+                            taskService.deleteTask(id);
+
+                        res.status =
+                            ok ? 200 : 500;
+                    });
+                    svr.Get("/api/stats",[](const httplib::Request&,
+                    httplib::Response& res)
+                    {
+                        json j;
+
+                        j["total"] = 0;
+                        j["completed"] = 0;
+                        j["pending"] = 0;
+
+                        res.set_content(
+                            j.dump(),
+                            "application/json"
+                        );
+                    });
+                    svr.Get("/api/work/history",[](const httplib::Request&,
+                    httplib::Response& res)
+                    {
+                        json arr = json::array();
+
+                        res.set_content(
+                            arr.dump(),
+                            "application/json"
+                        );
+                    });
+                    svr.Get("/api/stats",[](const httplib::Request&,
+                httplib::Response& res)
+                {
+                    json result;
+
+                    result["health"] = 100;
+                    result["avgRating"] = 4.8;
+
+                    result["trend"] = {
+                        {
+                            {"date","2026-07-01"},
+                            {"count",3}
+                        },
+                        {
+                            {"date","2026-07-02"},
+                            {"count",5}
+                        },
+                        {
+                            {"date","2026-07-03"},
+                            {"count",2}
+                        }
+                    };
+
+                    res.set_content(
+                        result.dump(),
+                        "application/json"
+                    );
+                });
     std::cout << "Server dang chay tai http://localhost:8080 (va http://127.0.0.1:8080)\n";
     // Dung "0.0.0.0" thay vi "localhost" de ep bind IPv4 ro rang,
     // tranh truong hop he thong resolve "localhost" thanh IPv6 (::1) khien 127.0.0.1 khong ket noi duoc.
