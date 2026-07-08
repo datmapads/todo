@@ -2,11 +2,12 @@
 #include "httplib.h"
 #include "json.hpp"
 #include "dotenv.h"
-#include "mysql.h"
+#include "C:\Program Files\MySQL\MySQL Server 8.0\include\mysql.h"
 #include <windows.h>
 #include <string>
 #include <iostream>
-#include "service/TaskService.h"
+#include "services/TaskService.h"
+#include "MySQLWrapper.h"
 using json = nlohmann::json;
 
 // ================== CẤU HÌNH KẾT NỐI DATABASE ==================
@@ -98,34 +99,48 @@ bool LoadMySQL()
     return true;
 }
 
-MYSQL *ConnectDB()
+MYSQL* ConnectDB()
 {
     if (!LoadMySQL())
         return nullptr;
 
-    MYSQL *conn = p_mysql_init(nullptr);
+    MYSQL* conn = p_mysql_init(nullptr);
+
     if (!conn)
     {
-        std::cerr << "[ConnectDB] mysql_init that bai" << std::endl;
+        std::cerr
+            << "[ConnectDB] mysql_init that bai"
+            << std::endl;
+
         return nullptr;
     }
 
-    if (p_mysql_options)
+    // Ket noi truc tiep, KHONG dung SSL
+    if (!p_mysql_real_connect(
+            conn,
+            DB_HOST.c_str(),
+            DB_USER.c_str(),
+            DB_PASS.c_str(),
+            DB_NAME.c_str(),
+            DB_PORT,
+            nullptr,
+            CLIENT_MULTI_STATEMENTS
+        ))
     {
-        int mode = SSL_MODE_DISABLED;
-        p_mysql_options(conn, MYSQL_OPT_SSL_MODE, (const char *)&mode);
-    }
-    else if (p_mysql_ssl_set)
-    {
-        p_mysql_ssl_set(conn, nullptr, nullptr, nullptr, nullptr, nullptr);
-    }
+        std::cerr
+            << "[ConnectDB] Loi ket noi MySQL: "
+            << p_mysql_error(conn)
+            << std::endl;
 
-    if (!p_mysql_real_connect(conn, DB_HOST.c_str(), DB_USER.c_str(), DB_PASS.c_str(), DB_NAME.c_str(), DB_PORT, nullptr, 0))
-    {
-        std::cerr << "[ConnectDB] Loi ket noi MySQL: " << p_mysql_error(conn) << std::endl;
         p_mysql_close(conn);
+
         return nullptr;
     }
+
+    std::cout
+        << "[ConnectDB] Ket noi MySQL thanh cong!"
+        << std::endl;
+
     return conn;
 }
 
