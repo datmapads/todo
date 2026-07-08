@@ -2,7 +2,7 @@
 #include "httplib.h"
 #include "json.hpp"
 #include "dotenv.h"
-#include "C:\\Program Files\\MySQL\\MySQL Server 8.0\\include\\mysql.h"
+#include "mysql.h"
 #include <windows.h>
 #include <string>
 #include <iostream>
