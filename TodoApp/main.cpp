@@ -2,12 +2,15 @@
 #include "httplib.h"
 #include "json.hpp"
 #include "dotenv.h"
-#include "mysql.h"
+#include <mysql.h>
 #include <windows.h>
+#include <vector>
+#include <algorithm>
 #include <string>
 #include <iostream>
-#include "services/TaskService.h"
+#include "service/TaskService.h"
 #include "MySQLWrapper.h"
+
 using json = nlohmann::json;
 
 // ================== CẤU HÌNH KẾT NỐI DATABASE ==================
@@ -175,10 +178,9 @@ int main()
     }
 
     httplib::Server svr;
-
+   
     // Phục vụ file tĩnh (index.html, css, js...) nằm cùng thư mục với main.cpp / file .exe
     svr.set_mount_point("/", "./");
-
    svr.Get("/tasks",[&taskService]
                 (const httplib::Request&,
                 httplib::Response& res)
@@ -190,7 +192,414 @@ int main()
                         "application/json"
                     );
                 });
+    svr.Get("/goals",[](const httplib::Request&,
+   httplib::Response& res)
+{
+    json arr = json::array();
 
+    MYSQL* conn = ConnectDB();
+
+    if(conn)
+    {
+        p_mysql_query(
+            conn,
+            "SELECT id,title,completed,rating "
+            "FROM goals "
+            "ORDER BY id DESC"
+        );
+
+        MYSQL_RES* rs =
+            p_mysql_store_result(conn);
+
+        if(rs)
+        {
+            MYSQL_ROW row;
+
+            while(
+                (row =
+                    p_mysql_fetch_row(rs))
+            )
+            {
+                arr.push_back({
+                    {"id",
+                        std::stoi(row[0])},
+                    {"title",
+                        row[1]},
+                    {"completed",
+                        std::stoi(row[2])},
+                    {"rating",
+                        row[3]
+                        ? std::stoi(row[3])
+                        : 0}
+                });
+            }
+
+            p_mysql_free_result(rs);
+        }
+
+        p_mysql_close(conn);
+    }
+
+    res.set_content(
+        arr.dump(),
+        "application/json"
+    );
+});
+   svr.Get("/api/stats",
+[](const httplib::Request&,
+   httplib::Response& res)
+{
+    json result;
+
+    MYSQL* conn = ConnectDB();
+
+    if(!conn)
+    {
+        res.status = 500;
+        return;
+    }
+
+    int total = 0;
+    int completed = 0;
+
+    p_mysql_query(
+        conn,
+        "SELECT COUNT(*), "
+        "SUM(completed) "
+        "FROM tasks"
+    );
+
+    MYSQL_RES* rs =
+        p_mysql_store_result(conn);
+
+    if(rs)
+    {
+        MYSQL_ROW row =
+            p_mysql_fetch_row(rs);
+
+        total =
+            row && row[0]
+            ? atoi(row[0])
+            : 0;
+
+        completed =
+            row && row[1]
+            ? atoi(row[1])
+            : 0;
+
+        p_mysql_free_result(rs);
+    }
+
+    result["avgProgress"] =
+        total == 0
+        ? 0
+        : completed * 100 / total;
+
+    double avgRating = 0;
+
+        p_mysql_query(
+            conn,
+            "SELECT AVG(rating) "
+            "FROM tasks "
+            "WHERE rating > 0"
+        );
+
+    MYSQL_RES* ratingRs =
+        p_mysql_store_result(conn);
+
+    if(ratingRs)
+    {
+        MYSQL_ROW ratingRow =
+            p_mysql_fetch_row(ratingRs);
+
+        avgRating =
+            ratingRow && ratingRow[0]
+            ? std::stod(ratingRow[0])
+            : 0;
+
+        p_mysql_free_result(ratingRs);
+    }
+
+    result["avgRating"] = avgRating;
+
+    //Thống kê phân bố đánh giá (rating distribution)
+    json ratingDist =
+{
+    {"1",0},
+    {"2",0},
+    {"3",0},
+    {"4",0},
+    {"5",0}
+};
+
+p_mysql_query(
+    conn,
+    "SELECT rating, COUNT(*) "
+    "FROM tasks "
+    "WHERE rating > 0 "
+    "GROUP BY rating"
+);
+
+MYSQL_RES* distRs =
+    p_mysql_store_result(conn);
+
+if(distRs)
+{
+    MYSQL_ROW row;
+
+    while((row = p_mysql_fetch_row(distRs)))
+    {
+        ratingDist[row[0]] =
+            std::stoi(row[1]);
+    }
+
+    p_mysql_free_result(distRs);
+}
+
+result["ratingDistribution"] =
+    ratingDist;
+    result["onTime"] =
+        completed;
+
+    result["late"] =
+        total - completed;
+
+    result["total"] =
+        total;
+
+    json byCategory =
+{
+    {"health",0},
+    {"work",0},
+    {"mental",0},
+    {"others",0}
+};
+
+p_mysql_query(
+    conn,
+    "SELECT category, COUNT(*) "
+    "FROM tasks "
+    "GROUP BY category"
+);
+
+MYSQL_RES* catRs =
+    p_mysql_store_result(conn);
+
+if(catRs)
+{
+    MYSQL_ROW row;
+
+    while((row = p_mysql_fetch_row(catRs)))
+    {
+        byCategory[row[0]] =
+            std::stoi(row[1]);
+    }
+
+    p_mysql_free_result(catRs);
+}
+
+result["byCategory"] =
+    byCategory;
+
+   json byPriority =
+{
+    {"p-high",0},
+    {"p-medium",0},
+    {"p-low",0}
+};
+
+p_mysql_query(
+    conn,
+    "SELECT priority, COUNT(*) "
+    "FROM tasks "
+    "GROUP BY priority"
+);
+
+MYSQL_RES* prioRs =
+    p_mysql_store_result(conn);
+
+if(prioRs)
+{
+    MYSQL_ROW row;
+
+    while((row = p_mysql_fetch_row(prioRs)))
+    {
+        byPriority[row[0]] =
+            std::stoi(row[1]);
+    }
+
+    p_mysql_free_result(prioRs);
+}
+
+result["byPriority"] =
+    byPriority;
+
+    result["ratingDistribution"] =
+    {
+        {"1",0},
+        {"2",0},
+        {"3",0},
+        {"4",0},
+        {"5",0}
+    };
+
+    result["trend"] = json::array({
+        {{"day","T2"},{"count",0}},
+        {{"day","T3"},{"count",0}},
+        {{"day","T4"},{"count",0}},
+        {{"day","T5"},{"count",0}},
+        {{"day","T6"},{"count",0}},
+        {{"day","T7"},{"count",0}},
+        {{"day","CN"},{"count",0}}
+    });
+
+    p_mysql_close(conn);
+
+    res.set_content(
+        result.dump(),
+        "application/json"
+    );
+});
+  svr.Get("/api/weekly",[](const httplib::Request&,
+   httplib::Response& res)
+{
+    MYSQL* conn = ConnectDB();
+
+    json result;
+
+    if(!conn)
+    {
+        res.status = 500;
+        return;
+    }
+
+    int total = 0;
+    int completed = 0;
+
+    p_mysql_query(
+        conn,
+        "SELECT COUNT(*), "
+        "SUM(completed) "
+        "FROM tasks"
+    );
+
+    MYSQL_RES* rs =
+        p_mysql_store_result(conn);
+
+    if(rs)
+    {
+        MYSQL_ROW row =
+            p_mysql_fetch_row(rs);
+
+        total =
+            row && row[0]
+            ? atoi(row[0])
+            : 0;
+
+        completed =
+            row && row[1]
+            ? atoi(row[1])
+            : 0;
+
+        p_mysql_free_result(rs);
+    }
+
+    result["completed"] =
+        completed;
+
+    result["completionRate"] =
+        total == 0
+        ? 0
+        : completed * 100 / total;
+
+    double avgRating = 0;
+
+p_mysql_query(
+    conn,
+    "SELECT AVG(rating) "
+    "FROM tasks "
+    "WHERE rating > 0"
+);
+
+MYSQL_RES* ratingRs =
+            p_mysql_store_result(conn);
+
+        if(ratingRs)
+        {
+            MYSQL_ROW ratingRow =
+                p_mysql_fetch_row(ratingRs);
+
+            avgRating =
+                ratingRow && ratingRow[0]
+                ? atof(ratingRow[0])
+                : 0;
+
+            p_mysql_free_result(ratingRs);
+        }
+
+        result["avgRating"] =
+            avgRating;
+
+    result["overdue"] = 0;
+
+    result["trend"] = json::array({
+        {{"day","T2"},{"count",0}},
+        {{"day","T3"},{"count",0}},
+        {{"day","T4"},{"count",0}},
+        {{"day","T5"},{"count",0}},
+        {{"day","T6"},{"count",0}},
+        {{"day","T7"},{"count",0}},
+        {{"day","CN"},{"count",0}}
+    });
+
+    p_mysql_close(conn);
+
+    res.set_content(
+        result.dump(),
+        "application/json"
+    );
+});
+            svr.Post("/goals",[](const httplib::Request& req,
+   httplib::Response& res)
+{
+    auto data =
+        json::parse(req.body);
+
+    std::string title =
+        data.value(
+            "title",
+            ""
+        );
+
+    MYSQL* conn =
+        ConnectDB();
+
+    if(!conn)
+    {
+        res.status = 500;
+        return;
+    }
+
+    std::string query =
+        "INSERT INTO goals "
+        "(title,completed,rating) "
+        "VALUES ('" +
+        Escape(conn,title) +
+        "',0,0)";
+
+    int ret =
+        p_mysql_query(
+            conn,
+            query.c_str()
+        );
+
+    p_mysql_close(conn);
+
+    res.status =
+        ret == 0
+        ? 201
+        : 500;
+});
     svr.Post("/api/login",[](const httplib::Request& req,
         httplib::Response& res)
 
@@ -232,16 +641,18 @@ int main()
     (const httplib::Request& req,
     httplib::Response& res)
     {
+     
         try
         {
             auto data = json::parse(req.body);
 
             bool ok =
-                taskService.addTask(
+                 taskService.addTask(
                     data.value("name",""),
                     data.value("category",""),
-                    data.value("priority","")
-                );
+                    data.value("priority",""),
+                    data.value("due_date","")
+            );
 
             if(ok)
             {
@@ -271,6 +682,7 @@ int main()
     });
 
         // Luu y: httplib 0.12.3 khong ho tro cu phap ":id" + path_params (chi co o ban moi hon).
+        
         // Ban nay dung regex thuan cho route, nen phai bat id bang capture group (\d+) va lay qua req.matches[1].
         svr.Put(R"(/tasks/(\d+))",[&taskService]
                 (const httplib::Request& req,
@@ -287,6 +699,93 @@ int main()
                     res.status =
                         ok ? 200 : 500;
                 });
+                svr.Put(R"(/tasks/(\d+)/rating)",[](const httplib::Request& req,
+                    httplib::Response& res)
+                    {
+                        int id =
+                            std::stoi(
+                                req.matches[1].str()
+                            );
+
+                        auto data =
+                            json::parse(req.body);
+
+                        int rating =
+                            data.value(
+                                "rating",
+                                0
+                            );
+
+                        MYSQL* conn =
+                            ConnectDB();
+
+                        if(!conn)
+                        {
+                            res.status = 500;
+                            return;
+                        }
+
+                        std::string query =
+                            "UPDATE tasks "
+                            "SET rating = " +
+                            std::to_string(rating) +
+                            " WHERE id = " +
+                            std::to_string(id);
+
+                        int ret =
+                            p_mysql_query(
+                                conn,
+                                query.c_str()
+                            );
+
+                        p_mysql_close(conn);
+
+                        res.status =
+                            ret == 0
+                            ? 200
+                            : 500;
+                    });
+            svr.Put(R"(/goals/(\d+))",[](const httplib::Request& req,
+                    httplib::Response& res)
+                    {
+                        int id =
+                            std::stoi(
+                                req.matches[1].str()
+                            );
+
+                        MYSQL* conn =
+                            ConnectDB();
+
+                        if(!conn)
+                        {
+                            res.status = 500;
+                            return;
+                        }
+
+                        std::string query =
+                            "UPDATE goals "
+                            "SET completed = 1 - completed, "
+                            "completed_at = CASE "
+                            "WHEN completed = 0 "
+                            "THEN NOW() "
+                            "ELSE NULL "
+                            "END "
+                            "WHERE id = " +
+                            std::to_string(id);
+
+                        int ret =
+                            p_mysql_query(
+                                conn,
+                                query.c_str()
+                            );
+
+                        p_mysql_close(conn);
+
+                        res.status =
+                            ret == 0
+                            ? 200
+                            : 500;
+                    });
         svr.Delete(R"(/tasks/(\d+))",[&taskService]
                     (const httplib::Request& req,
                     httplib::Response& res)
@@ -302,57 +801,41 @@ int main()
                         res.status =
                             ok ? 200 : 500;
                     });
-                    svr.Get("/api/stats",[](const httplib::Request&,
-                    httplib::Response& res)
-                    {
-                        json j;
 
-                        j["total"] = 0;
-                        j["completed"] = 0;
-                        j["pending"] = 0;
-
-                        res.set_content(
-                            j.dump(),
-                            "application/json"
-                        );
-                    });
-                    svr.Get("/api/work/history",[](const httplib::Request&,
-                    httplib::Response& res)
-                    {
-                        json arr = json::array();
-
-                        res.set_content(
-                            arr.dump(),
-                            "application/json"
-                        );
-                    });
-                    svr.Get("/api/stats",[](const httplib::Request&,
+                svr.Delete(R"(/goals/(\d+))",[](const httplib::Request& req,
                 httplib::Response& res)
                 {
-                    json result;
+                    int id =
+                        std::stoi(
+                            req.matches[1].str()
+                        );
 
-                    result["health"] = 100;
-                    result["avgRating"] = 4.8;
+                    MYSQL* conn =
+                        ConnectDB();
 
-                    result["trend"] = {
-                        {
-                            {"date","2026-07-01"},
-                            {"count",3}
-                        },
-                        {
-                            {"date","2026-07-02"},
-                            {"count",5}
-                        },
-                        {
-                            {"date","2026-07-03"},
-                            {"count",2}
-                        }
-                    };
+                    if(!conn)
+                    {
+                        res.status = 500;
+                        return;
+                    }
 
-                    res.set_content(
-                        result.dump(),
-                        "application/json"
-                    );
+                    std::string query =
+                        "DELETE FROM goals "
+                        "WHERE id = " +
+                        std::to_string(id);
+
+                    int ret =
+                        p_mysql_query(
+                            conn,
+                            query.c_str()
+                        );
+
+                    p_mysql_close(conn);
+
+                    res.status =
+                        ret == 0
+                        ? 200
+                        : 500;
                 });
     std::cout << "Server dang chay tai http://localhost:8080 (va http://127.0.0.1:8080)\n";
     // Dung "0.0.0.0" thay vi "localhost" de ep bind IPv4 ro rang,
