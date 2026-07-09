@@ -2182,7 +2182,7 @@ function renderTrend(containerId, points) {
 async function loadWeekly() {
     let stats;
     try {
-        const res = await fetch('/api/stats');
+        const res = await fetch('/api/weekly');
         if (res.status === 401) { handleLogout(); return; }
         stats = await res.json();
     } catch (err) {
@@ -2190,10 +2190,19 @@ async function loadWeekly() {
         return;
     }
 
-    const weekCompleted = stats.trend.reduce((s, p) => s + p.count, 0);
+    const trend =
+    stats.trend || [];
+
+    const weekCompleted =
+    stats.completed || 0;
+    renderTrend(
+    'chartWeeklyTrend',
+    trend
+    );
     const today = new Date(); today.setHours(0,0,0,0);
     const overdue = tasks.filter(t => !t.completed && t.due_date && new Date(t.due_date) < today).length;
-    const rate = Math.round((weekCompleted / Math.max(weekCompleted + tasks.filter(t => !t.completed).length, 1)) * 100);
+    const rate =
+    stats.completionRate || 0;
 
     document.getElementById('weeklyCompleted').textContent = weekCompleted;
     document.getElementById('weeklyRate').textContent = rate + '%';
