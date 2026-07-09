@@ -95,8 +95,7 @@ bool TaskService::addTask(
     const std::string& name,
     const std::string& category,
     const std::string& priority,
-    const std::string& dueDate,
-    int rating
+    const std::string& dueDate
 )
 {
     MYSQL* conn = ConnectDB();
@@ -117,18 +116,15 @@ bool TaskService::addTask(
             Escape(conn,dueDate) +
             "'";
     }
-
-    std::string query =
-    "INSERT INTO tasks "
-    "(name,category,priority,due_date,completed,rating) "
-    "VALUES ('" +
-    Escape(conn,name) + "','" +
-    Escape(conn,category) + "','" +
-    Escape(conn,priority) + "'," +
-    dueValue +
-    ",0," +
-    std::to_string(rating) +
-    ")";
+        std::string query =
+            "INSERT INTO tasks "
+            "(name,category,priority,due_date,completed) "
+            "VALUES ('" +
+            Escape(conn,name) + "','" +
+            Escape(conn,category) + "','" +
+            Escape(conn,priority) + "'," +
+            dueValue +
+            ",0)";
 
     std::cout
         << query
