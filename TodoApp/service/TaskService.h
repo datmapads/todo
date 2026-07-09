@@ -10,13 +10,12 @@ class TaskService
 public:
 
     json getTasks();
-
-    bool addTask(
+bool addTask(
         const std::string& name,
         const std::string& category,
-        const std::string& priority
+        const std::string& priority,
+        const std::string& dueDate
     );
-
     bool toggleTask(int id);
 
     bool deleteTask(int id);
